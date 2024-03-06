@@ -1,0 +1,11 @@
+main()ResponseResponse(response='Investment is the act of using savings to get a return on it in the future instead of keeping it idle.', source_nodes=[NodeWithScore(node=TextNode(id_='e01cd411-cc29-4811-b536-80efa2300954', embedding=None, metadata={'page_label': '3', 'file_name': 'C:/Users/deekshith.p/Desktop/PD...
+Response object.
+
+Returned if streaming=False.
+
+Attributes:
+    response: The response text.
+metadatadict	{'e01cd411-cc29-4811-b536-80efa2300954': {'page_label': '3', 'file_name': 'C:/Users/deekshith.p/Desktop/PDF/Basics_of_finmkts.pdf', 'file_path': 'C:\\Users\\deekshith.p\\Desktop\\PDF\\Basics_of_finmkts.pdf', 'file_type': 'application/pdf', 'file_size': 192210, 'creation_date': '2024-03-06', 'last_mo...
+responsestr	'Investment is the act of using savings to get a return on it in the future instead of keeping it idle.'
+source_nodeslist	[NodeWithScore(node=TextNode(id_='e01cd411-cc29-4811-b536-80efa2300954', embedding=None, metadata={'page_label': '3', 'file_name': 'C:/Users/deekshith.p/Desktop/PDF/Basics_of_finmkts.pdf', 'file_path': 'C:\\Users\\deekshith.p\\Desktop\\PDF\\Basics_of_finmkts.pdf', 'file_type': 'application/pdf', 'fi...
+get_formatted_sourcesmethod	Get formatted sources text.
