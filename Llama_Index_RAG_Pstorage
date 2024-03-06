@@ -124,3 +124,15 @@ def main():
 
 if __name__ == "__main__":
     main() 
+
+
+TypeError: AlertMixin.info() takes 2 positional arguments but 3 were given
+Traceback:
+File "c:\Users\deekshith.p\Llama_Index_PDF_RAG\.venv\lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 535, in _run_script
+    exec(code, module.__dict__)
+File "C:\Users\deekshith.p\Llama_Index_PDF_RAG\Llama_RAG_Pstorage.py", line 122, in <module>
+    main()
+File "C:\Users\deekshith.p\Llama_Index_PDF_RAG\Llama_RAG_Pstorage.py", line 118, in main
+    st.info("Answer:", answer.response)
+File "c:\Users\deekshith.p\Llama_Index_PDF_RAG\.venv\lib\site-packages\streamlit\runtime\metrics_util.py", line 397, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
