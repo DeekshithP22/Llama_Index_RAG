@@ -1,0 +1,128 @@
+import logging
+import sys
+import streamlit as st
+from llama_index.core.response.pprint_utils import pprint_response
+
+from llama_index.llms.azure_openai import AzureOpenAI
+from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+import os.path
+from llama_index.core import (
+    VectorStoreIndex,
+    SimpleDirectoryReader,
+    StorageContext,
+    load_index_from_storage,
+)
+
+# check if storage already exists
+PERSIST_DIR = "./storage"
+
+
+# either way we can now query the index
+# query_engine = index.as_query_engine()
+# response = query_engine.query("What are transformers?")
+# print(response)
+
+def setup_logging():
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+
+def setup_llm(api_key, azure_endpoint, api_version):
+    llm = AzureOpenAI(
+        model="",
+        deployment_name="",
+        api_key=api_key,
+        azure_endpoint=azure_endpoint,
+        api_version=api_version,
+    )
+    return llm
+
+def setup_embedding(api_key, azure_endpoint, api_version):
+    embed_model = AzureOpenAIEmbedding(
+        model="",
+        deployment_name="",
+        api_key=api_key,
+        azure_endpoint=azure_endpoint,
+        api_version=api_version,
+    )
+    return embed_model
+
+def setup_index(documents):
+    index = VectorStoreIndex.from_documents(documents)
+    return index
+
+# def setup_huggingface_embedding():
+#     embed_model = HuggingFaceEmbedding(model_name='BAAI/bge-small-en-v1.5')
+#     return embed_model
+
+def initialize(api_key, azure_endpoint, api_version):
+    setup_logging()
+    logging.info("Initializing AzureOpenAI...")
+    llm = setup_llm(api_key, azure_endpoint, api_version)
+    logging.info("Initializing Azure OpenAI Embeddings...")
+    embed_model = setup_embedding(api_key, azure_endpoint, api_version)
+    Settings.llm = llm
+    Settings.embed_model = embed_model
+    logging.info("Done initializing both the OpenAI LLM and Embeddings...")
+
+def document_loader(directory_path):
+    if not os.path.exists(PERSIST_DIR):
+        logging.info("Loading the document and creating VectorStoreIndex")
+        documents = SimpleDirectoryReader(input_dir= directory_path).load_data(num_workers=4)
+        index = setup_index(documents)
+        logging.info("Saving the VectorStoreIndex to the persistent storage")
+        index.storage_context.persist(persist_dir=PERSIST_DIR)
+        logging.info("Storing Done")
+        st.write("Documents loaded successfully and created VectorStoreIndex")
+    else:
+        logging.info("Loading the existing VectorStoreIndex from the Persistent Storage")
+        storage_context = StorageContext.from_defaults(persist_dir=PERSIST_DIR)
+        index = load_index_from_storage(storage_context)
+        logging.info("Loading completed")
+        st.write("Loaded the VectorStoreIndex successfully from the persistent storage")
+    return index
+
+def update_index(directory_path):
+    logging.info("Loading the Documents for updating the VectorStoreIndex")
+    documents = SimpleDirectoryReader(input_dir= directory_path).load_data(num_workers=4)
+    index = setup_index(documents)
+    logging.info("Done updating the VectorStoreIndex")
+    logging.info("Saving the VectorStoreIndex to the persistent storage")
+    index.storage_context.persist(persist_dir=PERSIST_DIR)
+    logging.info("Storing Done")
+    st.write("Loaded the documents and updated the VectorStoreIndex")
+    return index
+
+def main():
+
+    api_key = ""
+    azure_endpoint = ""
+    api_version = ""
+
+    initialize(api_key, azure_endpoint, api_version)
+
+    with st.sidebar:
+        st.title("📄 Menu:")
+        st.sidebar.markdown("---")
+        directory_path = st.sidebar.text_input("Enter the directory path of files:")
+        if st.sidebar.button("Update Index"):
+            st.session_state.index = update_index(directory_path)
+        if st.sidebar.button("Submit & Process"):
+            st.session_state.index = document_loader(directory_path)
+     
+    st.title("🤖RAG using Llama Index & OpenAI")
+
+    question = st.text_input("Enter your question:")
+
+    if question:
+        query_engine = st.session_state.index.as_query_engine()
+        answer = query_engine.query(question)
+        answer.get_formatted_sources()
+        pprint_response(answer, show_source=True)
+        st.write("Answer:", answer.response)
+
+
+if __name__ == "__main__":
+    main()
