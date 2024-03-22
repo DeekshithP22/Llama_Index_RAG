@@ -20,6 +20,23 @@ from llama_index.core import (
 # Check if storage already exists
 PERSIST_DIR = "./storage"
 
+# Define a dictionary of users and their credentials
+user_credentials = {
+    "user1@example.com": {"password": "password1", "persona": ["ANY_EMPLOYEE"]},
+    "user2@example.com": {"password": "password2", "persona": ["SERVICE_LINE_HEAD"]},
+    "user3@example.com": {"password": "password3", "persona": ["CXO"]},
+    "user4@example.com": {"password": "password4", "persona": ["CORPORATE_STRATEGY"]},
+    "admin@example.com": {"password": "adminpassword", "persona": ["ADMIN"]}
+}
+
+# Authenticate user based on email, password, and persona
+def authenticate(email, password, persona):
+    if email in user_credentials:
+        user_data = user_credentials[email]
+        if user_data["password"] == password and persona in user_data["persona"]:
+            return True
+    return False
+
 # Setup logging
 def setup_logging():
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -148,46 +165,37 @@ def admin_page():
 # Streamlit UI for Home Page
 def home_page():
     st.title("Home Page")
-    st.sidebar.title("Select Persona")
+    with st.sidebar:
+       st.sidebar.title("Select Persona")
+       persona = st.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+       
+       email = st.text_input("Email:")
+       password = st.text_input("Password:", type="password")
+       if st.button("Login"):
+           if authenticate(email, password, persona):
+               st.success("Authentication successful!")
+           else:
+               st.error("Authentication failed. Please check
+your credentials and persona selection.")
 
-    # Authentication form for user login
-    email = st.sidebar.text_input("Email")
-    password = st.sidebar.text_input("Password", type="password")
-    persona = st.sidebar.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+    question = st.text_area("Ask a question:", height=100, max_chars=500)
 
-    if st.sidebar.button("Login"):
-        if authenticate(email, password, persona):
-            st.success(f"Welcome, {persona}!")
-            question = st.text_area("Ask a question:", height=100, max_chars=500)
-
-            if question:
-                try:
-                    index = load_index(persona)
-                    if index:
-                        query_engine = index.as_query_engine()
-                        answer = query_engine.query(question)
-                        answer.get_formatted_sources()
-                        with st.container():
-                            st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
-                            pprint_response(answer, show_source=True)
-                            st.write("Answer: \n", answer.response)
-                            st.markdown("</div>", unsafe_allow_html=True)
-                    else:
-                        st.error("Failed to load index.")
-                except Exception as e:
-                    st.error(f"Error processing question: {str(e)}")
-        else:
-            st.error("Authentication failed. Please check your credentials.")
-
-# Authentication function
-def authenticate(email, password, persona):
-    # Placeholder authentication logic, replace with your actual authentication mechanism
-    if email == "admin@example.com" and password == "admin123":
-        return True
-    elif email == "user@example.com" and password == "user123" and persona in ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"]:
-        return True
-    else:
-        return False
+    if question:
+        try:
+            index = load_index(persona)
+            if index:
+                query_engine = index.as_query_engine()
+                answer = query_engine.query(question)
+                answer.get_formatted_sources()
+                with st.container():
+                    st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                    pprint_response(answer, show_source=True)
+                    st.write("Answer: \n", answer.response)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.error("Failed to load index.")
+        except Exception as e:
+            st.error(f"Error processing question: {str(e)}")
 
 # Main function
 def main():
@@ -196,6 +204,10 @@ def main():
     azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
     api_version = "2023-03-15-preview"
     initialize(api_key, azure_endpoint, api_version)
+
+    with st.sidebar:
+        st.title("Menu")
+        st.sidebar.markdown("---")
 
     # Page selection
     page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
