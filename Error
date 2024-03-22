@@ -282,3 +282,62 @@ def admin_page():
                     st.error("Failed to update index.")
         else:
             st.error("Incorrect email or password. Please try again.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def home_page():
+    st.title("Home Page")
+
+    # Sidebar for authentication
+    st.sidebar.title("Authentication")
+    email = st.sidebar.text_input("Email:")
+    password = st.sidebar.text_input("Password:", type="password")
+    persona = st.sidebar.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+
+    if st.sidebar.button("Login"):
+        if authenticate(email, password, persona):
+            st.success("Authentication successful!")
+            display_main_page(persona)
+        else:
+            st.error("Authentication failed. Please check your credentials and persona selection.")
+
+def display_main_page(persona):
+    st.title(f"{persona.capitalize()} Page")
+    st.write("Welcome to the main page!")
+    st.write("Here you can ask questions and get answers.")
+
+    question = st.text_area("Ask a question:", height=100, max_chars=500)
+
+    if question:
+        try:
+            index = load_index(persona)
+            if index:
+                query_engine = index.as_query_engine()
+                answer = query_engine.query(question)
+                answer.get_formatted_sources()
+                with st.container():
+                    st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                    pprint_response(answer, show_source=True)
+                    st.write("Answer: \n", answer.response)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.error("Failed to load index.")
+        except Exception as e:
+            st.error(f"Error processing question: {str(e)}")
+
