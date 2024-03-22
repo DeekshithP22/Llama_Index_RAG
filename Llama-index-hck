@@ -1,0 +1,249 @@
+import logging
+import sys
+import os.path
+import streamlit as st
+from enum import Enum
+
+from llama_index.core.response.pprint_utils import pprint_response
+from llama_index.llms.azure_openai import AzureOpenAI
+from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.core.node_parser import SentenceSplitter
+
+from llama_index.core import (
+    VectorStoreIndex,
+    SimpleDirectoryReader,
+    StorageContext,
+    load_index_from_storage,
+)
+
+# Enum for persona
+class Persona(Enum):
+    CORPORATE_STRATEGY = 1
+    ANY_EMPLOYEE = 2
+    CXO = 3
+    SERVICE_LINE_HEAD = 4
+
+# Check if storage already exists
+PERSIST_DIR = "./storage"
+
+# Setup logging
+def setup_logging():
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+
+# Initialize OpenAI models and embeddings
+def setup_llm(api_key, azure_endpoint, api_version):
+    llm = AzureOpenAI(
+        model="gpt-35-turbo-16k",
+        deployment_name="gpt-35-turbo",
+        api_key=api_key,
+        azure_endpoint=azure_endpoint,
+        api_version=api_version,
+    )
+    return llm
+
+def setup_embedding(api_key, azure_endpoint, api_version):
+    embed_model = AzureOpenAIEmbedding(
+        model="text-embedding-ada-002",
+        deployment_name="text-embedding-ada-002",
+        api_key=api_key,
+        azure_endpoint=azure_endpoint,
+        api_version=api_version,
+    )
+    return embed_model
+
+# Setup index with separate storage for public and confidential data
+def setup_index(documents, persona):
+    Settings.text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
+    index = VectorStoreIndex.from_documents(documents, transformations=[SentenceSplitter(chunk_size=1024, chunk_overlap=20)])
+
+    # Create directories for public and confidential if they don't exist
+    if not os.path.exists(os.path.join(PERSIST_DIR, "public")):
+        os.makedirs(os.path.join(PERSIST_DIR, "public"))
+    if not os.path.exists(os.path.join(PERSIST_DIR, "confidential")):
+        os.makedirs(os.path.join(PERSIST_DIR, "confidential"))
+
+    if persona == Persona.CORPORATE_STRATEGY:
+        # Save the index embeddings for public data
+        index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "public"))
+    elif persona == Persona.ANY_EMPLOYEE or persona == Persona.CXO or persona == Persona.SERVICE_LINE_HEAD:
+        # Save the index embeddings for both public and confidential data
+        index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "public"))
+        if persona != Persona.ANY_EMPLOYEE:  # Confidential data should not be accessible to Any Employee
+            index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "confidential"))
+
+    return index
+
+# Process uploaded files into documents (example function)
+def process_uploaded_file(file):
+    # Example function to process uploaded file into documents
+    return documents
+
+# Update index with new documents
+def update_index(directory_path, storage_type):
+    try:
+        st.info("Loading documents for updating the VectorStoreIndex...")
+        documents = SimpleDirectoryReader(input_dir=directory_path).load_data(num_workers=4)
+        
+        # Update index based on storage type
+        if storage_type == "Public":
+            persona = Persona.CORPORATE_STRATEGY
+        elif storage_type == "Confidential":
+            persona = Persona.ANY_EMPLOYEE  # Or whichever persona is applicable for confidential storage
+        else:
+            st.error("Invalid storage type selected.")
+            return None
+        
+        index = setup_index(documents, persona)
+        storage_dir = os.path.join(PERSIST_DIR, storage_type.lower())
+        
+        st.info("Done updating the VectorStoreIndex.")
+        st.info("Saving the VectorStoreIndex to the persistent storage...")
+        index.storage_context.persist(persist_dir=storage_dir)
+        st.success("Documents loaded and VectorStoreIndex updated successfully.")
+        return index
+    except Exception as e:
+        st.error(f"Error updating index: {str(e)}")
+        return None
+
+# Initialize
+def initialize(api_key, azure_endpoint, api_version):
+    setup_logging()
+    logging.info("Initializing AzureOpenAI...")
+    llm = setup_llm(api_key, azure_endpoint, api_version)
+    logging.info("Initializing Azure OpenAI Embeddings...")
+    embed_model = setup_embedding(api_key, azure_endpoint, api_version)
+    Settings.llm = llm
+    Settings.embed_model = embed_model
+    logging.info("Done initializing both the OpenAI LLM and Embeddings...")
+
+# Load index from storage based on the selected persona
+def load_index(directory_path, persona):
+    try:
+        if persona == Persona.CORPORATE_STRATEGY:
+            storage_dir = os.path.join(PERSIST_DIR, "public")
+        elif persona == Persona.ANY_EMPLOYEE or persona == Persona.CXO or persona == Persona.SERVICE_LINE_HEAD:
+            if "confidential" in directory_path.lower():
+                if persona == Persona.ANY_EMPLOYEE:
+                    st.error("Access Denied: Confidential information cannot be accessed by Any Employee.")
+                elif persona == Persona.CXO:
+                    st.error("Access Denied: Confidential information cannot be accessed by CXOs.")
+                elif persona == Persona.SERVICE_LINE_HEAD:
+                    st.error("Access Denied: Confidential information cannot be accessed by Service Line Heads.")
+                return None
+            storage_dir = os.path.join(PERSIST_DIR, "public")
+
+        storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
+        index = load_index_from_storage(storage_context)
+        return index
+    except Exception as e:
+        st.error(f"Error loading index: {str(e)}")
+
+# Streamlit UI for Admin Page
+def admin_page():
+    st.title("Admin Page")
+    st.write("Upload files and update indexes here.")
+
+    uploaded_files = st.file_uploader("Upload files", accept_multiple_files=True)
+    storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
+
+    if uploaded_files:
+        st.write("Files uploaded successfully.")
+
+        # Process uploaded files and update indexes
+        for file in uploaded_files:
+            index = update_index(file, storage_type)
+            if index:
+                st.success(f"Index updated successfully for {storage_type.lower()} storage.")
+            else:
+                st.error("Failed to update index.")
+
+# Streamlit UI for Home Page
+def home_page():
+    st.title("Home Page")
+    st.write("Load indexes based on persona and ask questions here.")
+
+    persona = st.radio("Select Persona:", [persona.name for persona in Persona])
+
+    with st.spinner("Initializing..."):
+        try:
+            index = load_index(user, directory_path, persona)
+        except Exception as e:
+            st.error(f"Error initializing: {str(e)}")
+
+    question = st.text_area("Ask a question:", height=100, max_chars=500)
+
+    if question:
+        try:
+            query_engine = index.as_query_engine()
+            answer = query_engine.query(question)
+            answer.get_formatted_sources()
+            with st.container():
+                st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                pprint_response(answer, show_source=True)
+                st.write("Answer: \n", answer.response)
+                st.markdown("</div>", unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"Error processing question: {str(e)}")
+
+    st.markdown("---")
+    st.write("If you're an admin, you can go to the Admin Page to upload files and update indexes.")
+    admin_page_link = st.button("Go to Admin Page")
+    if admin_page_link:
+        admin_page()
+def main():
+    # UI setup
+    api_key = "a6efd3fae742488ebbcaefeaaddb0aff"
+    azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
+    api_version = "2023-03-15-preview"
+    initialize(api_key, azure_endpoint, api_version)
+
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
+
+    if page == "Home Page":
+        st.title("Persona Selection")
+        persona = st.radio("Select Persona:", [persona.name for persona in Persona])
+
+        with st.spinner("Initializing..."):
+            try:
+                index = load_index(None, persona)
+            except Exception as e:
+                st.error(f"Error initializing: {str(e)}")
+
+        question = st.text_area("Ask a question:", height=100, max_chars=500)
+
+        if question:
+            try:
+                query_engine = index.as_query_engine()
+                answer = query_engine.query(question)
+                answer.get_formatted_sources()
+                with st.container():
+                    st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                    pprint_response(answer, show_source=True)
+                    st.write("Answer: \n", answer.response)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error processing question: {str(e)}")
+
+    elif page == "Admin Page":
+        st.title("Admin Page")
+        st.write("Upload files and update indexes here.")
+
+        uploaded_files = st.file_uploader("Upload files", accept_multiple_files=True)
+        storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
+
+        if uploaded_files:
+            st.write("Files uploaded successfully.")
+
+            # Process uploaded files and update indexes
+            for file in uploaded_files:
+                index = update_index(file, storage_type)
+                if index:
+                    st.success(f"Index updated successfully for {storage_type.lower()} storage.")
+                else:
+                    st.error("Failed to update index.")
+
+if __name__ == "__main__":
+    main()
