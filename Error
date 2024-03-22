@@ -2,7 +2,6 @@ import logging
 import sys
 import os.path
 import streamlit as st
-from enum import Enum
 
 from llama_index.core.response.pprint_utils import pprint_response
 from llama_index.llms.azure_openai import AzureOpenAI
@@ -17,12 +16,6 @@ from llama_index.core import (
     load_index_from_storage,
 )
 
-# # Enum for persona
-# class Persona(Enum):
-#     CORPORATE_STRATEGY = 1
-#     ANY_EMPLOYEE = 2
-#     CXO = 3
-#     SERVICE_LINE_HEAD = 4
 
 # Check if storage already exists
 PERSIST_DIR = "./storage"
@@ -59,17 +52,17 @@ def setup_index(documents, persona):
     index = VectorStoreIndex.from_documents(documents, transformations=[SentenceSplitter(chunk_size=1024, chunk_overlap=20)])
 
     # Create directories for public and confidential if they don't exist
-    if not os.path.exists(os.path.join(PERSIST_DIR, "public")):
-        os.makedirs(os.path.join(PERSIST_DIR, "public"))
-    if not os.path.exists(os.path.join(PERSIST_DIR, "confidential")):
-        os.makedirs(os.path.join(PERSIST_DIR, "confidential"))
+    if not os.path.exists(os.path.join(PERSIST_DIR, "Public")):
+        os.makedirs(os.path.join(PERSIST_DIR, "Public"))
+    if not os.path.exists(os.path.join(PERSIST_DIR, "Confidential")):
+        os.makedirs(os.path.join(PERSIST_DIR, "Confidential"))
 
-    if persona == "CORPORATE_STRATEGY" or "CXO":
+    if persona == "CORPORATE_STRATEGY" or persona == "CXO":
         # Save the index embeddings for public data
-        index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "confidential"))
+        index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "Confidential"))
     elif persona == "ANY_EMPLOYEE" or persona == "SERVICE_LINE_HEAD":
         # Save the index embeddings for both public and confidential data
-        index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "public"))
+        index.storage_context.persist(persist_dir=os.path.join(PERSIST_DIR, "Public"))
 
     return index
 
@@ -82,9 +75,9 @@ def update_index(directory_path, storage_type):
         
         # Update index based on storage type
         if storage_type == "Public":
-            persona = "CORPORATE_STRATEGY", "SERVICE_LINE_HEAD"
+            persona = ["CORPORATE_STRATEGY", "SERVICE_LINE_HEAD"]
         elif storage_type == "Confidential":
-            persona = "CXO", "CORPORATE_STRATEGY" # Or whichever persona is applicable for confidential storage
+            persona = ["CXO", "CORPORATE_STRATEGY"] # Or whichever persona is applicable for confidential storage
         else:
             st.error("Invalid storage type selected.")
             return None
@@ -116,13 +109,13 @@ def initialize(api_key, azure_endpoint, api_version):
 def load_index(persona):
     try:
         print(persona)
-        if persona == "ANY_EMPLOYEE" or "SERVICE_LINE_HEAD":
+        if persona in ["ANY_EMPLOYEE","SERVICE_LINE_HEAD"]:
             storage_dir = os.path.join(PERSIST_DIR, "public")
             storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
             index = load_index_from_storage(storage_context)
             return index
             
-        elif persona == "CXO" or persona == "CORPORATE_STRATEGY":
+        elif persona in ["CXO", "CORPORATE_STRATEGY"]:
             storage_dir = os.path.join(PERSIST_DIR, "confidential")
             storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
             index = load_index_from_storage(storage_context)
@@ -143,21 +136,22 @@ def admin_page():
     directory_path = st.text_area("Enter the directory path of the files:")
     storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
 
-    if directory_path:
-        if st.button("Update Index"):
-            with st.spinner("updating index...."):
+
+    if st.button("Update Index"):
+        with st.spinner("updating index...."):
         # Process uploaded files and update indexes
-               st.session_state.index = update_index(directory_path, storage_type)
+            st.session_state.index = update_index(directory_path, storage_type)
         if st.session_state.index:
-                st.success(f"Index updated successfully for {storage_type.lower()} storage.")
+            st.success(f"Index updated successfully for {storage_type.lower()} storage.")
         else:
-                st.error("Failed to update index.")
+            st.error("Failed to update index.")
 
 # Streamlit UI for Home Page
 def home_page():
     st.title("Home Page")
-    st.sidebar.title("Persona Selection")
-    persona = st.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+    with st.sidebar:
+       st.sidebar.title("Select Persona")
+       persona = st.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
 
     question = st.text_area("Ask a question:", height=100, max_chars=500)
 
@@ -181,10 +175,14 @@ def home_page():
 # Main function
 def main():
     # UI setup
-    api_key = ""
-    azure_endpoint = ""
-    api_version = ""
+    api_key = "a6efd3fae742488ebbcaefeaaddb0aff"
+    azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
+    api_version = "2023-03-15-preview"
     initialize(api_key, azure_endpoint, api_version)
+
+    with st.sidebar:
+     st.title("Menu")
+     st.sidebar.markdown("---")
 
     # Page selection
     page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
