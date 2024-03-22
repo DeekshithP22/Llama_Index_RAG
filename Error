@@ -341,3 +341,56 @@ def display_main_page(persona):
         except Exception as e:
             st.error(f"Error processing question: {str(e)}")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def home_page():
+    st.title("Home Page")
+
+    # Sidebar for authentication
+    st.sidebar.title("Authentication")
+    email = st.sidebar.text_input("Email:")
+    password = st.sidebar.text_input("Password:", type="password")
+    persona = st.sidebar.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+
+    # Check if login button is clicked
+    if st.sidebar.button("Login"):
+        if authenticate(email, password, persona):
+            st.sidebar.success("Authentication successful!")
+            display_main_page(persona)
+        else:
+            st.sidebar.error("Authentication failed. Please check your credentials and persona selection.")
+    
+    # Main page content
+    question = st.text_area("Ask a question:", height=100, max_chars=500)
+    if question:
+        try:
+            index = load_index(persona)
+            if index:
+                query_engine = index.as_query_engine()
+                answer = query_engine.query(question)
+                answer.get_formatted_sources()
+                with st.container():
+                    st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                    pprint_response(answer, show_source=True)
+                    st.write("Answer: \n", answer.response)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.error("Failed to load index.")
+        except Exception as e:
+            st.error(f"Error processing question: {str(e)}")
+
