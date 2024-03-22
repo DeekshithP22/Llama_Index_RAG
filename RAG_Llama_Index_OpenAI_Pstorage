@@ -6,7 +6,8 @@ from llama_index.core.response.pprint_utils import pprint_response
 from llama_index.llms.azure_openai import AzureOpenAI
 from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core.node_parser import SentenceSplitter
+
 
 import os.path
 from llama_index.core import (
@@ -27,8 +28,8 @@ def setup_logging():
 
 def setup_llm(api_key, azure_endpoint, api_version):
     llm = AzureOpenAI(
-        model="",
-        deployment_name="",
+        model="gpt-35-turbo-16k",
+        deployment_name="gpt-35-turbo",
         api_key=api_key,
         azure_endpoint=azure_endpoint,
         api_version=api_version,
@@ -38,8 +39,8 @@ def setup_llm(api_key, azure_endpoint, api_version):
 
 def setup_embedding(api_key, azure_endpoint, api_version):
     embed_model = AzureOpenAIEmbedding(
-        model="",
-        deployment_name="",
+        model="text-embedding-ada-002",
+        deployment_name="text-embedding-ada-002",
         api_key=api_key,
         azure_endpoint=azure_endpoint,
         api_version=api_version,
@@ -48,7 +49,8 @@ def setup_embedding(api_key, azure_endpoint, api_version):
 
 
 def setup_index(documents):
-    index = VectorStoreIndex.from_documents(documents)
+    Settings.text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
+    index = VectorStoreIndex.from_documents(documents,transformations=[SentenceSplitter(chunk_size=1024, chunk_overlap=20)],)
     return index
 
 
@@ -97,9 +99,9 @@ def update_index(directory_path):
 
 
 def main():
-    api_key = ""
-    azure_endpoint = ""
-    api_version = ""
+    api_key = "a6efd3fae742488ebbcaefeaaddb0aff"
+    azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
+    api_version = "2023-03-15-preview"
 
     initialize(api_key, azure_endpoint, api_version)
 
@@ -112,15 +114,22 @@ def main():
             .reportview-container .main .block-container {
                 background-color: #ffffff;
             }
-            .stTextInput>div>div>input {
+            .stTextInput>div>div>textarea {
                 background-color: #f8f9fa !important;
                 color: #000000 !important;
                 border-radius: 5px;
+                width: 100%:
+                height:100px;
             }
             .stButton>button {
                 background-color: #007bff !important;
                 color: #ffffff !important;
                 border-radius: 5px;
+            }
+            .amswer-box{
+                background-color: #f0f8ff;
+                padding: 15px;
+                border-radius: 10px
             }
         </style>
         """,
@@ -130,25 +139,28 @@ def main():
     with st.sidebar:
         st.title("📄 Menu:")
         st.sidebar.markdown("---")
-        directory_path = st.text_input("Enter the directory path of files:", key="directory_path")
+        directory_path = st.text_area("Enter the directory path of files:")
         if st.button("Update Index"):
             with st.spinner("Updating Index..."):
                 st.session_state.index = update_index(directory_path)
         if st.button("Submit & Process"):
-            with st.spinner("Loading Documents..."):
+            with st.spinner("Processing..."):
                 st.session_state.index = document_loader(directory_path)
 
     st.title("🤖 RAG using Llama Index & OpenAI")
 
-    question = st.text_area("Ask a question:", key="question", height=100, max_chars=500)
+    question = st.text_area("Ask a question:", height=100, max_chars=500)
 
     if question:
         try:
             query_engine = st.session_state.index.as_query_engine()
             answer = query_engine.query(question)
             answer.get_formatted_sources()
-            pprint_response(answer, show_source=True)
-            st.write("Answer:", answer.response)
+            with st.container():
+                st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                pprint_response(answer, show_source=True)
+                st.write("Answer: \n"  , answer.response)
+                st.markdown("</div>", unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Error processing question: {str(e)}")
 
