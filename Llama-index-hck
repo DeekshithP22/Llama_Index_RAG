@@ -90,7 +90,7 @@ def update_index(directory_path, storage_type):
         if storage_type == "Public":
             persona = Persona.CORPORATE_STRATEGY
         elif storage_type == "Confidential":
-            persona = Persona.ANY_EMPLOYEE  # Or whichever persona is applicable for confidential storage
+            persona = Persona.CXO  # Or whichever persona is applicable for confidential storage
         else:
             st.error("Invalid storage type selected.")
             return None
@@ -127,11 +127,14 @@ def load_index(directory_path, persona):
             if "confidential" in directory_path.lower():
                 if persona == Persona.ANY_EMPLOYEE:
                     st.error("Access Denied: Confidential information cannot be accessed by Any Employee.")
+               
                 elif persona == Persona.CXO:
                     st.error("Access Denied: Confidential information cannot be accessed by CXOs.")
                 elif persona == Persona.SERVICE_LINE_HEAD:
                     st.error("Access Denied: Confidential information cannot be accessed by Service Line Heads.")
                 return None
+            storage_dir = os.path.join(PERSIST_DIR, "public")
+        else:
             storage_dir = os.path.join(PERSIST_DIR, "public")
 
         storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
@@ -162,60 +165,15 @@ def admin_page():
 # Streamlit UI for Home Page
 def home_page():
     st.title("Home Page")
-    st.write("Load indexes based on persona and ask questions here.")
-
-    persona = st.radio("Select Persona:", [persona.name for persona in Persona])
-
-    with st.spinner("Initializing..."):
-        try:
-            index = load_index(user, directory_path, persona)
-        except Exception as e:
-            st.error(f"Error initializing: {str(e)}")
+    st.sidebar.title("Persona Selection")
+    persona = st.sidebar.radio("Select Persona:", [persona.name for persona in Persona])
 
     question = st.text_area("Ask a question:", height=100, max_chars=500)
 
     if question:
         try:
-            query_engine = index.as_query_engine()
-            answer = query_engine.query(question)
-            answer.get_formatted_sources()
-            with st.container():
-                st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
-                pprint_response(answer, show_source=True)
-                st.write("Answer: \n", answer.response)
-                st.markdown("</div>", unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Error processing question: {str(e)}")
-
-    st.markdown("---")
-    st.write("If you're an admin, you can go to the Admin Page to upload files and update indexes.")
-    admin_page_link = st.button("Go to Admin Page")
-    if admin_page_link:
-        admin_page()
-def main():
-    # UI setup
-    api_key = ""
-    azure_endpoint = ""
-    api_version = ""
-    initialize(api_key, azure_endpoint, api_version)
-
-    st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
-
-    if page == "Home Page":
-        st.title("Persona Selection")
-        persona = st.radio("Select Persona:", [persona.name for persona in Persona])
-
-        with st.spinner("Initializing..."):
-            try:
-                index = load_index(None, persona)
-            except Exception as e:
-                st.error(f"Error initializing: {str(e)}")
-
-        question = st.text_area("Ask a question:", height=100, max_chars=500)
-
-        if question:
-            try:
+            index = load_index(None, persona)
+            if index:
                 query_engine = index.as_query_engine()
                 answer = query_engine.query(question)
                 answer.get_formatted_sources()
@@ -224,26 +182,26 @@ def main():
                     pprint_response(answer, show_source=True)
                     st.write("Answer: \n", answer.response)
                     st.markdown("</div>", unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Error processing question: {str(e)}")
+            else:
+                st.error("Failed to load index.")
+        except Exception as e:
+            st.error(f"Error processing question: {str(e)}")
 
+# Main function
+def main():
+    # UI setup
+    api_key = "a6efd3fae742488ebbcaefeaaddb0aff"
+    azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
+    api_version = "2023-03-15-preview"
+    initialize(api_key, azure_endpoint, api_version)
+
+    # Page selection
+    page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
+
+    if page == "Home Page":
+        home_page()
     elif page == "Admin Page":
-        st.title("Admin Page")
-        st.write("Upload files and update indexes here.")
-
-        uploaded_files = st.file_uploader("Upload files", accept_multiple_files=True)
-        storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
-
-        if uploaded_files:
-            st.write("Files uploaded successfully.")
-
-            # Process uploaded files and update indexes
-            for file in uploaded_files:
-                index = update_index(file, storage_type)
-                if index:
-                    st.success(f"Index updated successfully for {storage_type.lower()} storage.")
-                else:
-                    st.error("Failed to update index.")
+        admin_page()
 
 if __name__ == "__main__":
     main()
