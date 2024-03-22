@@ -136,10 +136,9 @@ def admin_page():
     directory_path = st.text_area("Enter the directory path of the files:")
     storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
 
-
     if st.button("Update Index"):
         with st.spinner("updating index...."):
-        # Process uploaded files and update indexes
+            # Process uploaded files and update indexes
             st.session_state.index = update_index(directory_path, storage_type)
         if st.session_state.index:
             st.success(f"Index updated successfully for {storage_type.lower()} storage.")
@@ -149,28 +148,46 @@ def admin_page():
 # Streamlit UI for Home Page
 def home_page():
     st.title("Home Page")
-    with st.sidebar:
-       st.sidebar.title("Select Persona")
-       persona = st.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+    st.sidebar.title("Select Persona")
 
-    question = st.text_area("Ask a question:", height=100, max_chars=500)
+    # Authentication form for user login
+    email = st.sidebar.text_input("Email")
+    password = st.sidebar.text_input("Password", type="password")
+    persona = st.sidebar.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
 
-    if question:
-        try:
-            index = load_index(persona)
-            if index:
-                query_engine = index.as_query_engine()
-                answer = query_engine.query(question)
-                answer.get_formatted_sources()
-                with st.container():
-                    st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
-                    pprint_response(answer, show_source=True)
-                    st.write("Answer: \n", answer.response)
-                    st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.error("Failed to load index.")
-        except Exception as e:
-            st.error(f"Error processing question: {str(e)}")
+    if st.sidebar.button("Login"):
+        if authenticate(email, password, persona):
+            st.success(f"Welcome, {persona}!")
+            question = st.text_area("Ask a question:", height=100, max_chars=500)
+
+            if question:
+                try:
+                    index = load_index(persona)
+                    if index:
+                        query_engine = index.as_query_engine()
+                        answer = query_engine.query(question)
+                        answer.get_formatted_sources()
+                        with st.container():
+                            st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                            pprint_response(answer, show_source=True)
+                            st.write("Answer: \n", answer.response)
+                            st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.error("Failed to load index.")
+                except Exception as e:
+                    st.error(f"Error processing question: {str(e)}")
+        else:
+            st.error("Authentication failed. Please check your credentials.")
+
+# Authentication function
+def authenticate(email, password, persona):
+    # Placeholder authentication logic, replace with your actual authentication mechanism
+    if email == "admin@example.com" and password == "admin123":
+        return True
+    elif email == "user@example.com" and password == "user123" and persona in ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"]:
+        return True
+    else:
+        return False
 
 # Main function
 def main():
@@ -179,10 +196,6 @@ def main():
     azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
     api_version = "2023-03-15-preview"
     initialize(api_key, azure_endpoint, api_version)
-
-    with st.sidebar:
-     st.title("Menu")
-     st.sidebar.markdown("---")
 
     # Page selection
     page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
