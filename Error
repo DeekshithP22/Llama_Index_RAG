@@ -625,3 +625,50 @@ def display_main_page(persona):
         except Exception as e:
             st.error(f"Error processing question: {str(e)}")
 
+
+
+
+
+
+
+
+
+
+
+
+
+def admin_page():
+    st.sidebar.title("Admin Login")
+    email = st.sidebar.text_input("Email:")
+    password = st.sidebar.text_input("Password:", type="password")
+    login_button = st.sidebar.button("Login")
+
+    if login_button:
+        if authenticate(email, password, "admin"):
+            st.session_state.authenticated = True
+            st.session_state.email_input = ""  # Clear email field
+            st.session_state.password_input = ""  # Clear password field
+        else:
+            st.error("Incorrect email or password. Please try again.")
+
+    # Check if authenticated
+    if st.session_state.get("authenticated"):
+        display_admin_content()
+
+def display_admin_content():
+    st.title("Admin Page")
+    st.write("Upload files and update indexes here.")
+
+    directory_path = st.text_area("Enter the directory path of the files:")
+    storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
+
+    if st.button("Update Index"):
+        with st.spinner("Updating index...."):
+            # Process uploaded files and update indexes
+            st.session_state.index = update_index(directory_path, storage_type)
+        if st.session_state.index:
+            st.success(f"Index updated successfully for {storage_type.lower()} storage.")
+        else:
+            st.error("Failed to update index.")
+
+
