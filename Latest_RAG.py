@@ -298,3 +298,31 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PS C:\Users\deekshith.p\Data_AI_Hackathon> & c:/Users/deekshith.p/Data_AI_Hackathon/.venv/Scripts/python.exe c:/Users/deekshith.p/Data_AI_Hackathon/cpg_test.py
+INFO:root:Initializing AzureOpenAI...
+Initializing AzureOpenAI...
+INFO:root:Initializing Azure OpenAI Embeddings...
+Initializing Azure OpenAI Embeddings...
+INFO:root:Done initializing both the OpenAI LLM and Embeddings...
+Done initializing both the OpenAI LLM and Embeddings...
+2024-03-23 15:59:38.945 
+  Warning: to view this Streamlit app on a browser, run it with the following
+  command:
+
+    streamlit run c:/Users/deekshith.p/Data_AI_Hackathon/cpg_test.py [ARGUMENTS]
+2024-03-23 15:59:38.947 Session state does not function when running a script without `streamlit run`
+PS C:\Users\deekshith.p\Data_AI_Hackathon> 
