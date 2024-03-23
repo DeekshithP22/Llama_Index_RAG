@@ -2,6 +2,7 @@ import logging
 import sys
 import os.path
 import streamlit as st
+import plotly.express as px
 
 from llama_index.core.response.pprint_utils import pprint_response
 from llama_index.llms.azure_openai import AzureOpenAI
@@ -16,6 +17,42 @@ from llama_index.core import (
     load_index_from_storage,
 )
 
+# Define color scheme
+primary_color = "#3366ff"
+secondary_color = "#66ff66"
+
+# CSS styling
+st.markdown(
+    f"""
+    <style>
+        /* Custom CSS styles */
+        body {{
+            background-color: #f5f5f5;
+            color: #333;
+            font-family: Arial, sans-serif;
+        }}
+        .btn-primary {{
+            background-color: {primary_color};
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }}
+        .btn-primary:hover {{
+            background-color: #254EDA;
+        }}
+        .text-input {{
+            background-color: #fff;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 0.25rem;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Check if storage already exists
 PERSIST_DIR = "./storage"
@@ -39,7 +76,7 @@ def authenticate(email, password, persona):
         return False
     
     except Exception as e:
-        st.error(f"Error occured during authentication {str(e)}")
+        st.error(f"Error occurred during authentication {str(e)}")
     
 # Setup logging
 def setup_logging():
@@ -155,6 +192,7 @@ def load_index(persona):
             index = load_index_from_storage(storage_context)
             return index
             
+        elif
         elif persona in ["CXO", "CORPORATE_STRATEGY"]:
             storage_dir = os.path.join(PERSIST_DIR, "confidential")
             storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
@@ -172,7 +210,7 @@ def load_index(persona):
 
 def admin_page():
     try:
-        st.title("🤖  Corporate Performance Geek")
+        st.title("Admin Page")
         st.sidebar.title("Admin Login")
         email = st.sidebar.text_input("Email:")
         password = st.sidebar.text_input("Password:", type="password")
@@ -186,56 +224,40 @@ def admin_page():
                 else:
                     st.error("Incorrect email or password. Please try again.")
             except Exception as e:
-              st.error(f"Error occured during authentication: {str(e)}")
+                st.error(f"Error occurred during authentication: {str(e)}")
 
         # Check if authenticated
         if st.session_state.get("authenticated"):
-            display_admin_content()
+            st.title("Admin Page")
+            st.write("Upload files and update indexes here.")
+
+            directory_path = st.text_area("Enter the directory path of the files:")
+            storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
+
+            if st.button("Update Index"):
+                with st.spinner("Updating index...."):
+                    # Process uploaded files and update indexes
+                    st.session_state.index = update_index(directory_path, storage_type)
+                if st.session_state.index:
+                    st.success(f"Index updated successfully for {storage_type.lower()} storage.")
+                else:
+                    st.error("Failed to update index.")
 
     except Exception as e:
         st.error(f"Error loading admin page: {str(e)}")
         return None           
 
-def display_admin_content():
-    try:
-        st.title("Admin Page")
-        st.write("Upload files and update indexes here.")
-
-        directory_path = st.text_area("Enter the directory path of the files:")
-        storage_type = st.selectbox("Select storage type to update:", ["Public", "Confidential"])
-
-        if st.button("Update Index"):
-            with st.spinner("Updating index...."):
-                # Process uploaded files and update indexes
-                st.session_state.index = update_index(directory_path, storage_type)
-            if st.session_state.index:
-                st.success(f"Index updated successfully for {storage_type.lower()} storage.")
-            else:
-                st.error("Failed to update index.")
-                
-    except Exception as e:
-        st.error(f"Error displaying admin page content: {str(e)}")
-        return None         
-      
 
 def home_page():
     try:
-        st.title("🤖  Corporate Performance Geek")
-
-        # Sidebar for authentication
-        persona = st.sidebar.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
+        st.title("🤖 Corporate Performance Geek")
         st.sidebar.title("Authentication")
+        persona = st.sidebar.selectbox("Select Persona:", ["ANY_EMPLOYEE", "SERVICE_LINE_HEAD", "CXO", "CORPORATE_STRATEGY"])
         email = st.sidebar.text_input("Email:")
         password = st.sidebar.text_input("Password:", type="password")
-        
+        login_button = st.sidebar.button("Login")
 
-        # Check if persona selection changed
-        if "selected_persona" not in st.session_state or st.session_state.selected_persona != persona:
-            st.session_state.authenticated = False
-            st.session_state.selected_persona = persona
-
-        # Check if login button is clicked
-        if st.sidebar.button("Login"):
+        if login_button:
             try:
                 if authenticate(email, password, persona):
                     st.sidebar.success("Authentication successful!")
@@ -243,39 +265,31 @@ def home_page():
                 else:
                     st.sidebar.error("Authentication failed. Please check your credentials and persona selection.")
             except Exception as e:
-                st.error(f"authentication failed: {str(e)}")
-            
-        # Display main page content if authenticated
+                st.error(f"Error occurred during authentication: {str(e)}")
+
         if st.session_state.get("authenticated"):
-            display_main_page(persona)
+            st.markdown("---")
+            question = st.text_area("Ask a question:", height=100, max_chars=500)
+            if st.button("Submit"):
+                index = load_index(persona)
+                if index:
+                    query_engine = index.as_query_engine()
+                    answer = query_engine.query(question)
+                    answer.get_formatted_sources()
+                    with st.container():
+                        st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
+                        pprint_response(answer, show_source=True)
+                        st.write("Answer: \n", answer.response)
+                        st.markdown("</div>", unsafe_allow_html=True)
+                else:
+                    st.error("Failed to load index.")
 
     except Exception as e:
         st.error(f"Error loading home page: {str(e)}")
-        return None      
+        return None
 
-def display_main_page(persona):
-    # Main page content
-    question = st.text_area("Ask a question:", height=100, max_chars=500)
-    if question:
-        try:
-            index = load_index(persona)
-            if index:
-                query_engine = index.as_query_engine()
-                answer = query_engine.query(question)
-                answer.get_formatted_sources()
-                with st.container():
-                    st.markdown("<div class='answer-box'>", unsafe_allow_html=True)
-                    pprint_response(answer, show_source=True)
-                    st.write("Answer: \n", answer.response)
-                    st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.error("Failed to load index.")
-        except Exception as e:
-            st.error(f"Error processing question: {str(e)}")
-# Main function
 
 def main():
-    # UI setup
     api_key = "a6efd3fae742488ebbcaefeaaddb0aff"
     azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
     api_version = "2023-03-15-preview"
@@ -283,15 +297,15 @@ def main():
 
     with st.sidebar:
         st.title("Menu")
-        st.sidebar.markdown("---")
+        st.sidebar.write("---")
 
-    # Page selection
     page = st.sidebar.radio("Go to", ["Home Page", "Admin Page"])
 
     if page == "Home Page":
         home_page()
     elif page == "Admin Page":
         admin_page()
+
 
 if __name__ == "__main__":
     main()
