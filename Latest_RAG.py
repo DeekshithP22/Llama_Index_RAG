@@ -331,9 +331,9 @@ def display_main_page(persona):
 # Main function
 def main():
     # UI setup
-    api_key = "a6efd3fae742488ebbcaefeaaddb0aff"
-    azure_endpoint = "https://openai-ppcazure017.openai.azure.com/"
-    api_version = "2023-03-15-preview"
+    api_key = ""
+    azure_endpoint = ""
+    api_version = ""
     initialize(api_key, azure_endpoint, api_version)
 
     with st.sidebar:
