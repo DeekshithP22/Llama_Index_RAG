@@ -1,14 +1,15 @@
 #Importing necessary frameworks and libraries
-import logging
+import os
 import sys
 import os.path
+import logging
+import pandas as pd
 import streamlit as st
+
 from langchain_openai import AzureOpenAI
 from langchain_openai import AzureChatOpenAI
-from langchain_openai import AzureOpenAIEmbeddings
-import pandas as pd
-import os
 from langchain_experimental.agents import create_csv_agent
+from langchain_experimental.agents import create_pandas_dataframe_agent 
 
 from llama_index.core.response.pprint_utils import pprint_response
 from llama_index.llms.azure_openai import AzureOpenAI
@@ -18,6 +19,7 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core import Prompt
 from llama_index.core import GPTListIndex
 from llama_index.core import ComposableGraph
+from llama_index.readers.file import CSVReader
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.core import (
     VectorStoreIndex,
@@ -71,8 +73,8 @@ def setup_llm(api_key, azure_endpoint, api_version):
         #                   you should have respective authorization or credentials to aceess the confidential data."""
        
         llm = AzureOpenAI(
-            model="gpt-35-turbo-16k",
-            deployment_name="gpt-35-turbo-16k",
+            model=os.getenv("OPENAI_MODEL"),
+            deployment_name=os.getenv("OPENAI_DEPLOYMENT"),
             api_key=api_key,
             azure_endpoint=azure_endpoint,
             api_version=api_version,
@@ -84,13 +86,28 @@ def setup_llm(api_key, azure_endpoint, api_version):
     except Exception as e:
         st.error(f"Error setting up LLM: {str(e)}")   
         return None
-
+    
+def struct_llm(api_key, azure_endpoint, api_version):
+    try:
+        llm = AzureChatOpenAI(
+            model=os.getenv("OPENAI_MODEL"),
+            azure_deployment=os.getenv("OPENAI_STRUCT_DEPLOYMENT"),
+            api_key=api_key,
+            azure_endpoint=azure_endpoint,
+            api_version=api_version,
+        )
+        return llm
+    
+    except Exception as e:
+        st.error(f"Error setting up LLM: {str(e)}")   
+        return None
+      
 # Initialize embedding model
 def setup_embedding(api_key, azure_endpoint, api_version):
     try:
         embed_model = AzureOpenAIEmbedding(
-            model="text-embedding-ada-002",
-            deployment_name="text-embedding-ada-002",
+            model=os.getenv("OPENAI_EMBEDDING_MODEL"),
+            deployment_name= os.getenv("OPENAI_EMBEDDING_DEPLOYMENT_NAME"),
             api_key=api_key,
             azure_endpoint=azure_endpoint,
             api_version=api_version,
@@ -162,6 +179,11 @@ def new_index(directory_path, storage_type):
 def update_index(directory_path, storage_type):
     try:
         Settings.text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
+        # files = os.listdir(directory_path)
+        # loader = CSVReader()
+        # dict=[]
+        # documents = loader.load_data(file=directory_path,extra_info=dict)
+        # print("Done reading CSV document")
         documents = SimpleDirectoryReader(input_dir=directory_path).load_data(num_workers=4)
         
         if storage_type == "Public":
@@ -242,43 +264,42 @@ def load_index(persona):
         st.error(f"Error loading index: {str(e)}")
         return None
 
+def create_agent(llm):
+    df = pd.read_csv(r'C:\Users\deekshith.p\Data_AI_Hackathon\storage\Structured_Data\Dummy_Financial_Summary_Q4FY22.csv')
+    agent = create_pandas_dataframe_agent(llm, df, verbose=True, agent_type="openai-tools")
+    return agent
 
-# Define color scheme
-# primary_color = "#3366ff"
-# secondary_color = "#66ff66"
 
-# # CSS styling
-# st.markdown(
-#     f"""
-#     <style>
-#         /* Custom CSS styles */
-#         body {{
-#             background-color: #f5f5f5;
-#             color: #333;
-#             font-family: Arial, sans-serif;
-#         }}
-#         .btn-primary {{
-#             background-color: {primary_color};
-#             color: #fff;
-#             padding: 0.5rem 1rem;
-#             border-radius: 0.25rem;
-#             border: none;
-#             cursor: pointer;
-#             transition: background-color 0.3s ease;
-#         }}
-#         .btn-primary:hover {{
-#             background-color: #254EDA;
-#         }}
-#         .text-input {{
-#             background-color: #fff;
-#             padding: 0.5rem;
-#             border: 1px solid #ccc;
-#             border-radius: 0.25rem;
-#         }}
-#     </style>
-#     """,
-#     unsafe_allow_html=True
-# )
+def run_agent(agent, query):
+    try:
+        response = agent.run(query)
+    except ValueError as e:
+        response = str(e)
+        if not response.startswith("Could not parse LLM output: `"):
+            raise e
+        response = response.removeprefix("Could not parse LLM output: `").removesuffix("`")
+    return response
+
+def struct_query():
+    # Create a directory for storing Excel files if not exists
+    if not os.path.exists(os.path.join(PERSIST_DIR, "Structured_Data")):
+        os.makedirs(os.path.join(PERSIST_DIR, "Structured_Data"))
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    azure_endpoint = os.getenv("OPENAI_ENDPOINT")
+    api_version = os.getenv("OPENAI_API_VERSION")
+    
+    llm = struct_llm(api_key, azure_endpoint, api_version)
+
+    # Query input box
+    query = st.text_input("Enter question to query structured data")
+
+    # "Query Excel" button
+    if query:
+        agent = create_agent(llm)
+        response = run_agent(agent, query)
+        st.write("Response:", response)
+
 
 # UI for admin login
 def admin_page():
@@ -294,7 +315,6 @@ def admin_page():
                 if authenticate(email, password, "ADMIN"):
                     st.session_state.admin_authenticated = True
                     st.sidebar.success("Authentication successful!")
-
 
                 else:
                     st.error("Incorrect email or password. Please try again.")
@@ -368,29 +388,25 @@ def home_page():
             
         # Display main page content if authenticated
         if st.session_state.get("authenticated"):
-            display_main_page(persona)
+            display_home_main_page(persona)
 
     except Exception as e:
         st.error(f"Error loading home page: {str(e)}")
         return None      
 
 # UI for user page
-def display_main_page(persona):
-    
+def display_home_main_page(persona):
+
     index = load_index(persona)
     # Main page content
     question = st.text_area("Ask a question:", height=100, max_chars=500)
+
+
+    if persona == "CORPORATE_STRATEGY" or persona == "CXO":   
+        struct_query()
+
     if question:
         try:
-            # template = f""" Answer the user's question as thoroughly as possible based on the provided 
-            # context. If there are any spelling mistakes in the user question, please correct them before searching 
-            # for the answer. Strive to locate the most relevant context for the query. If the answer is not available 
-            # in the provided context, respond with "Answer is not available in the context r you do not have access to this data as this is confidential, please login with credentials of persona having access to confidential data" without providing an 
-            # incorrect answer.\n\nContext:\n{index} Please analyze the user's question and structure your response accordingly.
-            # Reply:
-            # """
-            # print(template)
-            # qa_template = Prompt(template)
             query_engine = index.as_query_engine()
             answer = query_engine.query(question)
             answer.get_formatted_sources()
@@ -402,15 +418,15 @@ def display_main_page(persona):
         except Exception as e:
             st.error(f"Error processing question: {str(e)}")
 
+    # UI setup
+api_key = os.getenv("OPENAI_API_KEY")
+azure_endpoint = os.getenv("OPENAI_ENDPOINT")
+api_version = os.getenv("OPENAI_API_VERSION")
+    
+initialize(api_key, azure_endpoint, api_version)
+
 # Main function
 def main():
-    # UI setup
-    api_key = ""
-    azure_endpoint = ""
-    api_version = ""
-    
-    initialize(api_key, azure_endpoint, api_version)
-
 
     primary_color = "#3366ff"
     secondary_color = "#66ff66"
@@ -463,4 +479,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
